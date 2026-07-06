@@ -168,3 +168,44 @@ h1 {
 .filter-notice a {
   color: #58a6ff;
 }
+
+/* Stock search (Phase 6) */
+.search-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.search-form input {
+  flex: 1;
+  max-width: 280px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #e6edf3;
+  padding: 7px 12px;
+  font-size: 0.9rem;
+}
+
+.search-form input:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+
+.search-form button {
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #e6edf3;
+  padding: 7px 14px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.search-form button:hover {
+  background: #30363d;
+}
+
+.subtitle a {
+  color: #58a6ff;
+}

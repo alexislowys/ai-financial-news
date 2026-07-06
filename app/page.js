@@ -88,6 +88,17 @@ export default async function Home({ searchParams }) {
           Live market headlines with AI summaries &amp; sentiment.
           {!hasAnalysis && " (AI analysis off — set GEMINI_API_KEY in .env.local)"}
         </p>
+        {/* Plain GET form — /search normalizes and redirects to /stock/TICKER */}
+        <form action="/search" className="search-form">
+          <input
+            type="text"
+            name="q"
+            placeholder="Find a stock… (e.g. AAPL)"
+            maxLength={10}
+            autoComplete="off"
+          />
+          <button type="submit">Search</button>
+        </form>
       </header>
 
       {brief && (
@@ -115,7 +126,7 @@ export default async function Home({ searchParams }) {
                 <span className={`tag tag-${ai.sentiment}`}>{ai.sentiment}</span>
               )}
               {ai?.tickers.map((t) => (
-                <Link key={t} href={`/?ticker=${t}`} className="tag tag-ticker">
+                <Link key={t} href={`/stock/${t}`} className="tag tag-ticker">
                   {t}
                 </Link>
               ))}
