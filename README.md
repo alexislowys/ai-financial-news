@@ -1,5 +1,7 @@
 # AI Financial News Summarizer
 
+![Daily market brief with sentiment bar and AI-tagged headlines](docs/screenshot.png)
+
 Aggregates financial news and summarizes market-moving events with AI-powered
 sentiment analysis.
 
