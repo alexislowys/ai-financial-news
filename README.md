@@ -9,6 +9,18 @@ sentiment analysis.
 
 **Stack:** Next.js · OpenAI SDK (pointed at Google Gemini's free API) · PostgreSQL (Neon free tier) · Vercel cron
 
+## Why I built it
+
+I'm a data science student, and I wanted a project that touched a real
+production stack end to end — not another notebook. This app forced me through
+the whole lifecycle: parsing messy real-world feeds, batching LLM calls to
+survive free-tier rate limits, designing a database layer so analysis is paid
+for once instead of on every page load, and debugging a deployment that worked
+locally but failed in CI (a dependency installed one directory too high —
+lesson learned about `node_modules` resolution). The most interesting
+constraint was cost: every design decision — caching, batching, analyze-once
+persistence — exists because the AI budget was $0.
+
 ## Roadmap
 
 - [x] **Phase 1 — News feed.** Fetch headlines from free RSS feeds (CNBC
