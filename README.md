@@ -3,7 +3,9 @@
 Aggregates financial news and summarizes market-moving events with AI-powered
 sentiment analysis.
 
-**Stack:** Next.js · OpenAI SDK (pointed at Google Gemini's free API) · PostgreSQL (Neon free tier)
+**Live demo:** [ai-financial-news-3i44.vercel.app](https://ai-financial-news-3i44.vercel.app)
+
+**Stack:** Next.js · OpenAI SDK (pointed at Google Gemini's free API) · PostgreSQL (Neon free tier) · Vercel cron
 
 ## Roadmap
 
@@ -23,8 +25,11 @@ sentiment analysis.
       today" digest built from the last 24h of stored analysis, a
       bullish/bearish/neutral ratio bar, and a click-to-filter-by-ticker view
       (`?ticker=AAPL`).
-- [ ] **Phase 5 — Deploy.** Ship to Vercel (free) with a cron job that
-      refreshes news automatically.
+- [x] **Phase 5 — Deploy.** Live on Vercel:
+      **[ai-financial-news-3i44.vercel.app](https://ai-financial-news-3i44.vercel.app)**.
+      A weekday cron (22:00 UTC, after US market close) hits `/api/refresh` to
+      fetch + analyze new stories automatically; the route is protected by a
+      `CRON_SECRET` bearer token so strangers can't burn the AI quota.
 
 ## Run locally
 
