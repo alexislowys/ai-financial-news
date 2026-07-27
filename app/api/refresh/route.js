@@ -10,7 +10,19 @@
 import { timingSafeEqual } from "node:crypto";
 import { fetchHeadlines } from "../../../lib/news";
 import { analyzeHeadlines } from "../../../lib/ai";
-import { getSavedAnalysis, saveArticles, splitBySaved } from "../../../lib/db";
+import {
+  getSavedAnalysis,
+  saveArticles,
+  splitBySaved,
+  getRecentArticles,
+  saveBrief,
+} from "../../../lib/db";
+import { generateBrief } from "../../../lib/brief";
+
+// This route owns every slow operation: RSS fetching, LLM analysis, and brief
+// generation. Pages only read the results, so a page render can never block on
+// a network call or exceed the serverless timeout.
+export const maxDuration = 60;
 
 /** Constant-time string compare — avoids leaking the secret via response timing. */
 function safeEqual(a, b) {
@@ -42,10 +54,17 @@ export async function GET(request) {
   const fresh = pending.length > 0 ? await analyzeHeadlines(pending) : [];
   await saveArticles(pending, fresh);
 
+  // Regenerate the daily brief from everything analyzed in the last 24h and
+  // store it, so the home page can render it without an LLM round trip.
+  const recent = await getRecentArticles(24);
+  const brief = await generateBrief(recent);
+  await saveBrief(brief);
+
   return Response.json({
     fetched: headlines.length,
     alreadyAnalyzed: saved.size,
     newlyAnalyzed: fresh ? pending.length : 0,
     aiOk: fresh !== null,
+    briefUpdated: Boolean(brief),
   });
 }

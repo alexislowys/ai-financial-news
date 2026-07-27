@@ -1,26 +1,18 @@
 // app/page.js
-// Server component: fetches news, runs AI analysis (DB-cached), and renders.
+// Server component that renders the news feed, the stored daily brief, and
+// today's sentiment ratio — entirely from the database.
 //
-// Phase 4 additions:
-// - Daily brief: one LLM digest of the last 24h of analyzed articles.
-// - Sentiment bar: today's bullish/bearish/neutral ratio at a glance.
-// - Ticker filter: click a ticker tag to see only that ticker's stories
-//   (?ticker=AAPL in the URL — server component reads searchParams).
+// Read/write split: /api/refresh (cron) does all the slow work — RSS fetching,
+// LLM analysis, brief generation — and writes it down. Pages only read.
+// Doing that work inline here cost ~6s before the LLM call even started, which
+// overran the serverless timeout and cached a broken page.
 
 import Link from "next/link";
-import { fetchHeadlines } from "../lib/news";
-import { analyzeHeadlines } from "../lib/ai";
-import {
-  getSavedAnalysis,
-  saveArticles,
-  splitBySaved,
-  mergeAnalysis,
-  getRecentArticles,
-} from "../lib/db";
-import { generateBrief, sentimentCounts } from "../lib/brief";
+import { getLatestArticles, getLatestBrief, getRecentArticles } from "../lib/db";
+import { sentimentCounts } from "../lib/brief";
 
-// Re-fetch feeds at most every 5 minutes (Next.js caches the page in between).
-export const revalidate = 300;
+// Cheap now that this is three parallel database reads, so revalidate often.
+export const revalidate = 60;
 
 function timeAgo(dateString) {
   if (!dateString) return "";
@@ -63,26 +55,18 @@ function SentimentBar({ counts }) {
 // That is a cheap amplification vector against our own free-tier quotas.
 // Per-ticker filtering lives at /stock/[ticker], which reads only the database.
 export default async function Home() {
-  const headlines = await fetchHeadlines(30);
+  // Database reads only. RSS fetching, LLM analysis and brief generation all
+  // happen in /api/refresh on a schedule, because doing them here pushed the
+  // render past the serverless timeout — which silently cached a page with
+  // missing sentiment tags and no brief.
+  const [articles, brief, recent] = await Promise.all([
+    getLatestArticles(30),
+    getLatestBrief(24),
+    getRecentArticles(24),
+  ]);
 
-  // Phase 3 flow: check DB first, only send UNSEEN stories to the AI.
-  const saved = await getSavedAnalysis(headlines.map((h) => h.link));
-  const { pending } = splitBySaved(headlines, saved);
-  const fresh = pending.length > 0 ? await analyzeHeadlines(pending) : [];
-  await saveArticles(pending, fresh);
-  const analysis = mergeAnalysis(headlines, saved, pending, fresh);
-  const hasAnalysis = analysis.some(Boolean);
-
-  // Phase 4: brief + sentiment ratio from the last 24h of stored articles.
-  // Falls back to the current page's analysis when the DB is empty/absent.
-  const recent = await getRecentArticles(24);
-  const briefSource = recent.length > 0 ? recent : analysis.filter(Boolean);
-  const [brief, counts] = [
-    await generateBrief(briefSource),
-    sentimentCounts(briefSource),
-  ];
-
-  const rows = headlines.map((item, i) => ({ item, ai: analysis[i] }));
+  const counts = sentimentCounts(recent);
+  const hasAnalysis = articles.length > 0;
 
   return (
     <main className="container">
@@ -118,30 +102,32 @@ export default async function Home() {
       )}
 
       <ul className="news-list">
-        {rows.map(({ item, ai }) => (
-          <li key={item.link} className="card">
+        {articles.map((a) => (
+          <li key={a.link} className="card">
             <div className="meta">
-              <span className="source">{item.source}</span>
-              <span className="time">{timeAgo(item.publishedAt)}</span>
-              {ai && (
-                <span className={`tag tag-${ai.sentiment}`}>{ai.sentiment}</span>
-              )}
-              {ai?.tickers.map((t) => (
+              <span className="source">{a.source}</span>
+              <span className="time">{timeAgo(a.published_at)}</span>
+              <span className={`tag tag-${a.sentiment}`}>{a.sentiment}</span>
+              {a.tickers?.map((t) => (
                 <Link key={t} href={`/stock/${t}`} className="tag tag-ticker">
                   {t}
                 </Link>
               ))}
             </div>
-            <a href={item.link} target="_blank" rel="noopener noreferrer">
-              {item.title}
+            <a href={a.link} target="_blank" rel="noopener noreferrer">
+              {a.title}
             </a>
-            <p className="snippet">{ai?.summary || item.snippet}</p>
+            {a.summary && <p className="snippet">{a.summary}</p>}
           </li>
         ))}
       </ul>
 
-      {rows.length === 0 && (
-        <p>No headlines loaded — check your internet connection and refresh.</p>
+      {articles.length === 0 && (
+        <p className="snippet">
+          No analyzed stories yet. The scheduled refresh populates these —
+          trigger it manually with <code>/api/refresh</code> if you just set the
+          project up.
+        </p>
       )}
     </main>
   );
