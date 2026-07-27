@@ -38,7 +38,12 @@ function SentimentBar({ counts }) {
   const pct = (n) => `${(n / total) * 100}%`;
   return (
     <div className="sentiment-overview">
-      <div className="sentiment-bar">
+      {/* The bar is purely visual, so give assistive tech the numbers directly. */}
+      <div
+        className="sentiment-bar"
+        role="img"
+        aria-label={`Sentiment of ${total} stories: ${counts.bullish} bullish, ${counts.neutral} neutral, ${counts.bearish} bearish`}
+      >
         <div className="bar-bullish" style={{ width: pct(counts.bullish) }} />
         <div className="bar-neutral" style={{ width: pct(counts.neutral) }} />
         <div className="bar-bearish" style={{ width: pct(counts.bearish) }} />
@@ -52,8 +57,12 @@ function SentimentBar({ counts }) {
   );
 }
 
-export default async function Home({ searchParams }) {
-  const { ticker } = await searchParams;
+// NOTE: this page deliberately takes no searchParams. Reading them would make
+// it fully dynamic, and `revalidate` would no longer apply — every request,
+// including `/?anything=1`, would re-run 4 RSS fetches plus database queries.
+// That is a cheap amplification vector against our own free-tier quotas.
+// Per-ticker filtering lives at /stock/[ticker], which reads only the database.
+export default async function Home() {
   const headlines = await fetchHeadlines(30);
 
   // Phase 3 flow: check DB first, only send UNSEEN stories to the AI.
@@ -73,12 +82,7 @@ export default async function Home({ searchParams }) {
     sentimentCounts(briefSource),
   ];
 
-  // Ticker filter: keep only rows whose analysis mentions the ticker.
-  const rows = headlines
-    .map((item, i) => ({ item, ai: analysis[i] }))
-    .filter(
-      (r) => !ticker || r.ai?.tickers.includes(ticker.toUpperCase())
-    );
+  const rows = headlines.map((item, i) => ({ item, ai: analysis[i] }));
 
   return (
     <main className="container">
@@ -90,7 +94,11 @@ export default async function Home({ searchParams }) {
         </p>
         {/* Plain GET form — /search normalizes and redirects to /stock/TICKER */}
         <form action="/search" className="search-form">
+          <label htmlFor="ticker-search" className="visually-hidden">
+            Search for a stock by ticker symbol
+          </label>
           <input
+            id="ticker-search"
             type="text"
             name="q"
             placeholder="Find a stock… (e.g. AAPL)"
@@ -107,13 +115,6 @@ export default async function Home({ searchParams }) {
           <p>{brief}</p>
           <SentimentBar counts={counts} />
         </section>
-      )}
-
-      {ticker && (
-        <p className="filter-notice">
-          Showing stories tagged <strong>{ticker.toUpperCase()}</strong> ·{" "}
-          <Link href="/">clear filter</Link>
-        </p>
       )}
 
       <ul className="news-list">
@@ -140,11 +141,7 @@ export default async function Home({ searchParams }) {
       </ul>
 
       {rows.length === 0 && (
-        <p>
-          {ticker
-            ? `No current stories tagged ${ticker.toUpperCase()}.`
-            : "No headlines loaded — check your internet connection and refresh."}
-        </p>
+        <p>No headlines loaded — check your internet connection and refresh.</p>
       )}
     </main>
   );

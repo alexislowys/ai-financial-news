@@ -1,5 +1,7 @@
 # AI Financial News Summarizer
 
+[![CI](https://github.com/alexislowys/ai-financial-news/actions/workflows/ci.yml/badge.svg)](https://github.com/alexislowys/ai-financial-news/actions/workflows/ci.yml)
+
 ![Daily market brief with sentiment bar and AI-tagged headlines](docs/screenshot.png)
 
 Aggregates financial news and summarizes market-moving events with AI-powered
@@ -37,13 +39,43 @@ persistence — exists because the AI budget was $0.
       gracefully when DATABASE_URL is unset.
 - [x] **Phase 4 — Daily market brief.** One AI-generated "what moved markets
       today" digest built from the last 24h of stored analysis, a
-      bullish/bearish/neutral ratio bar, and a click-to-filter-by-ticker view
-      (`?ticker=AAPL`).
+      bullish/bearish/neutral ratio bar, and per-ticker pages at
+      `/stock/AAPL`.
 - [x] **Phase 5 — Deploy.** Live on Vercel:
       **[ai-financial-news-3i44.vercel.app](https://ai-financial-news-3i44.vercel.app)**.
       A weekday cron (22:00 UTC, after US market close) hits `/api/refresh` to
       fetch + analyze new stories automatically; the route is protected by a
       `CRON_SECRET` bearer token so strangers can't burn the AI quota.
+
+## Security
+
+The app consumes third-party RSS text and feeds it to an LLM whose output is
+then stored and rendered, so untrusted input is the central design concern.
+
+| Threat | Mitigation |
+|---|---|
+| **Prompt injection** — a crafted headline instructing the model to change its output | Headline text is length-capped, stripped of angle brackets, wrapped in a delimited `<stories>` block, and preceded by an explicit instruction that the block is data, not commands |
+| **Hostile model output** — injected "tickers" like `../../../etc/passwd` or 500-character strings reaching the database and `href` attributes | Every ticker must match `^[A-Z][A-Z.\-]{0,5}$`; summaries are truncated; sentiment is coerced to a fixed enum. Covered by regression tests |
+| **SQL injection** | All queries are parameterized via `@neondatabase/serverless` tagged templates; the ticker route additionally validates input before querying |
+| **Quota / cost abuse** — anonymous traffic driving paid LLM calls and upstream fetches | The home page takes no search params, so it stays statically cached (5 min revalidate) instead of re-running RSS fetches per request; analysis is deduplicated against the database; LLM replies are token-capped |
+| **Unauthenticated refresh** | `/api/refresh` **fails closed** — a missing `CRON_SECRET` returns 503 in production rather than silently disabling the check — and compares the bearer token in constant time |
+| **XSS / clickjacking** | React escapes all interpolated values; CSP (`frame-ancestors 'none'`, `object-src 'none'`, `form-action 'self'`), `X-Frame-Options`, `nosniff`, and HSTS are set in `next.config.js` |
+| **Secret exposure** | Secrets live only in `.env.local` (git-ignored) and Vercel environment variables; nothing secret is committed or sent to the client |
+
+**Known accepted risk:** `npm audit` reports transitive advisories in `postcss`
+and `sharp`, both pinned by Next.js. No released Next version ships patched
+versions yet, and npm's suggested "fix" is a downgrade to Next 9. Neither is
+reachable here — `sharp` serves `next/image`, which this app never uses, and the
+`postcss` advisories require attacker-controlled CSS, which never enters the
+build. CI therefore audits production dependencies at `--audit-level=critical`.
+
+## Accessibility
+
+Keyboard-focusable controls have visible `:focus-visible` rings, the search
+input has a screen-reader label, the sentiment bar exposes its counts via
+`aria-label` rather than relying on color alone, and all text meets WCAG AA
+contrast (verified by measuring composited values — the bearish tag failed at
+4.35:1 and was corrected to 5.79:1).
 
 ## Run locally
 
@@ -88,5 +120,10 @@ RSS feeds (4, parallel)                    lib/news.js
 ## Tests
 
 ```bash
-npm test        # 27 tests: parser, AI response handling, DB merge logic
+npm test        # 41 tests: feed parsing, AI response handling, prompt-injection
+                # defenses, ticker validation, and DB merge logic
 ```
+
+Every push runs the suite, a clean `npm ci` install, a production build with no
+secrets present (proving the app degrades gracefully rather than crashing), and
+a dependency audit — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
