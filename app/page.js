@@ -24,6 +24,19 @@ function timeAgo(dateString) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+// Crons run weekdays only, so weekend visitors get Friday's brief — label
+// it with its day instead of hiding it or passing it off as today's.
+function briefHeading(createdAt) {
+  const ageHours = (Date.now() - new Date(createdAt)) / 3600000;
+  if (ageHours < 24) return "Today's market brief";
+  const day = new Date(createdAt).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
+  return `Market brief — ${day}`;
+}
+
 function SentimentBar({ counts }) {
   const total = counts.bullish + counts.bearish + counts.neutral;
   if (total === 0) return null;
@@ -61,7 +74,7 @@ export default async function Home() {
   // missing sentiment tags and no brief.
   const [articles, brief, recent] = await Promise.all([
     getLatestArticles(30),
-    getLatestBrief(24),
+    getLatestBrief(),
     getRecentArticles(24),
   ]);
 
@@ -95,8 +108,8 @@ export default async function Home() {
 
       {brief && (
         <section className="brief">
-          <h2>Today&apos;s market brief</h2>
-          <p>{brief}</p>
+          <h2>{briefHeading(brief.created_at)}</h2>
+          <p>{brief.text}</p>
           <SentimentBar counts={counts} />
         </section>
       )}
