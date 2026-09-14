@@ -62,12 +62,9 @@ then stored and rendered, so untrusted input is the central design concern.
 | **XSS / clickjacking** | React escapes all interpolated values; CSP (`frame-ancestors 'none'`, `object-src 'none'`, `form-action 'self'`), `X-Frame-Options`, `nosniff`, and HSTS are set in `next.config.js` |
 | **Secret exposure** | Secrets live only in `.env.local` (git-ignored) and Vercel environment variables; nothing secret is committed or sent to the client |
 
-**Known accepted risk:** `npm audit` reports transitive advisories in `postcss`
-and `sharp`, both pinned by Next.js. No released Next version ships patched
-versions yet, and npm's suggested "fix" is a downgrade to Next 9. Neither is
-reachable here — `sharp` serves `next/image`, which this app never uses, and the
-`postcss` advisories require attacker-controlled CSS, which never enters the
-build. CI therefore audits production dependencies at `--audit-level=critical`.
+**Dependency posture:** `npm audit --omit=dev` is clean as of Next 16.3.5.
+CI audits production dependencies at `--audit-level=critical` on every push,
+so a newly disclosed critical fails the build rather than lingering silently.
 
 ## Accessibility
 
